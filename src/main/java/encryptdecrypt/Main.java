@@ -14,8 +14,14 @@ import java.util.*;
  * The second argument is an integer key to modify the message,
  * and the third argument is a text or ciphertext to encrypt or decrypt.
  * Arguments -in and -out to specify the full name of a file to read data and to write the result.
+ * The necessary algorithm should be specified by an argument (-alg).
+ * The first algorithm should be named shift, the second one should be named unicode.
+ * If there is no -alg you should default it to shift.
  */
 public class Main {
+    static final String ALG = "-alg";
+    static final String SHIFT = "shift";
+    static final String UNICODE = "unicode";
     static final String ENC = "enc";
     static final String DEC = "dec";
     static final String MODE = "-mode";
@@ -25,6 +31,8 @@ public class Main {
     static final String OUT = "-out";
     static final String CONSOLE = "console";
     static final String ERROR = "Error";
+
+    static final String encrypt = "abcdefghijklmnopqrstuvwxyz";
 
     public static void main(String[] args) {
         try {
@@ -48,6 +56,7 @@ public class Main {
                 parameters.put(args[i - 1], args[i]);
             }
         }
+        final var alg = parameters.getOrDefault(ALG, SHIFT);
         final var mode = parameters.getOrDefault(MODE, ENC);
         final var key = Integer.parseInt(parameters.getOrDefault(KEY, "0"));
         final var in = parameters.getOrDefault(IN, null);
@@ -55,9 +64,9 @@ public class Main {
         final var out = parameters.getOrDefault(OUT, CONSOLE);
 
         if (out.equals(CONSOLE)) {
-            printToConsole(readData(data, key, mode, in));
+            printToConsole(readData(data, key, mode, in, alg));
         } else {
-            writeToFile(out, readData(data, key, mode, in));
+            writeToFile(out, readData(data, key, mode, in, alg));
         }
 
     }
@@ -71,8 +80,14 @@ public class Main {
      * @return string with encrypt/decrypt data
      * @throws IOException
      */
-    private static String readData(String data, int key, String mode, String in) throws IOException {
+    private static String readData(
+            String data,
+            int key,
+            String mode,
+            String in,
+            String alg) throws IOException {
         String cryptData;
+
         if (data != null && in != null || data != null && in == null) {
             cryptData = data;
         } else if (in != null && data == null ) {
@@ -80,26 +95,32 @@ public class Main {
         } else {
             throw new RuntimeException();
         }
-        return cryptData(cryptData, key, mode);
+
+        if (alg != null && alg.equals(UNICODE)) {
+            return cryptData(cryptData, key, mode, UNICODE);
+        } else if (alg != null && alg.equals(SHIFT)) {
+            return cryptData(cryptData, key, mode, SHIFT);
+        } else {
+            throw new RuntimeException();
+        }
     }
 
     /**
-     * Method modify data as String and encrypt or decrypt them
+     * Method shift data as String and encrypt or decrypt them
      * @param data input data
      * @param key encrypt/decrypt key
      * @param mode encrypt/decrypt mode
      * @return
      */
-    private static String cryptData(String data, int key, String mode) {
+    private static String cryptData(String data, int key, String mode, String alg) {
         char[] sb = new char[data.length()];
         data = data.trim();
-        System.out.println("length " + data.length());
         for (var i = 0; i < data.length(); i++) {
             var tmpChar = data.charAt(i);
             if (mode.equals(ENC)) {
-                sb[i] = encrypt(tmpChar, key);
+                sb[i] = encrypt(tmpChar, key, alg);
             } else {
-                sb[i] = decrypt(tmpChar, key);
+                sb[i] = decrypt(tmpChar, key, alg);
             }
         }
         return String.valueOf(sb);
@@ -111,8 +132,14 @@ public class Main {
      * @param key shift encrypting
      * @return
      */
-    private static char encrypt(char tmpChar, int key) {
-        return ((char) (tmpChar + key));
+    private static char encrypt(char tmpChar, int key, String alg) {
+        if (UNICODE.equals(alg)) {
+            return ((char) (tmpChar + key));
+        } else {
+            var index = encrypt.indexOf(Character.toLowerCase(tmpChar));
+            var enChar = index == -1 ? tmpChar : encrypt.charAt((index + key) % encrypt.length());
+            return Character.isUpperCase(tmpChar) ? Character.toUpperCase(enChar) : enChar;
+        }
     }
 
     /**
@@ -121,8 +148,21 @@ public class Main {
      * @param key shift decrypting
      * @return
      */
-    private static char decrypt(char tmpChar, int key) {
-        return ((char) (tmpChar - key));
+    private static char decrypt(char tmpChar, int key, String alg) {
+        if (UNICODE.equals(alg)) {
+            return ((char) (tmpChar - key));
+        } else {
+            var index = encrypt.indexOf(Character.toLowerCase(tmpChar));
+            if (index == -1) {
+                return tmpChar;
+            } else if (index - key < 0) {
+                var enChar = encrypt.charAt(encrypt.length() - Math.abs(index - key));
+                return Character.isUpperCase(tmpChar) ? Character.toUpperCase(enChar) : enChar;
+            } else {
+                var enChar = encrypt.charAt(index - key);
+                return Character.isUpperCase(tmpChar) ? Character.toUpperCase(enChar) : enChar;
+            }
+        }
     }
 
     /**
